@@ -395,6 +395,39 @@ function performViewAction(view, action, el) {
   }
 }
 
+function performMaterializedViewAction(view, action, el) {
+  if (action == "delete" || action == "refresh") {
+    var actionLabel = action == "refresh" ? "refresh" : "delete";
+    var message = "Are you sure you want to " + actionLabel + " materialized view " + view + " ?";
+    if (!confirm(message)) return;
+  }
+
+  switch(action) {
+    case "refresh":
+      executeQuery("REFRESH MATERIALIZED VIEW " + view, function(data) {
+        if (data.error) alert(data.error);
+      });
+      break;
+    case "delete":
+      executeQuery("DROP MATERIALIZED VIEW " + view, function(data) {
+        if (data.error) alert(data.error);
+        loadSchemas();
+        resetTable();
+      });
+      break;
+    case "export":
+      var format = el.data("format");
+      var db = $("#current_database").text();
+      var filename = db + "." + view + "." + format;
+      var query = "SELECT * FROM " + view;
+      openInNewWindow("api/query", { "format": format, "filename": filename, "query": query });
+      break;
+    case "copy":
+      copyToClipboard(view.split('.')[1]);
+      break;
+  }
+}
+
 function performRowAction(action, value) {
   if (action == "stop_query") {
     if (!confirm("Are you sure you want to stop the query?")) return;
@@ -1392,13 +1425,13 @@ function bindContextMenus() {
 
     if (group == "materialized_view") {
       $(el).contextmenu({
-        target: "#view_context_menu",
+        target: "#materialized_view_context_menu",
         scopes: "li.schema-materialized_view",
         onItem: function(context, e) {
           var el      = $(e.target);
           var table   = getQuotedSchemaTableName($(context[0]).data("id"));
           var action  = el.data("action");
-          performViewAction(table, action, el);
+          performMaterializedViewAction(table, action, el);
         }
       });
     }
