@@ -353,7 +353,7 @@ function performTableAction(table, action, el) {
 function performViewAction(view, action, el, type) {
   var isMaterializedView = (type == "materialized_view");
 
-  if (action == "delete" || action == "refresh") {
+  if (action == "delete") {
     var message = "Are you sure you want to " + action + " view " + view + " ?";
     if (!confirm(message)) return;
   }
@@ -369,9 +369,10 @@ function performViewAction(view, action, el, type) {
       break;
     case "refresh":
       if (isMaterializedView) {
-        executeQuery("REFRESH MATERIALIZED VIEW " + view, function(data) {
-          if (data.error) alert(data.error);
-        });
+        showQueryPanel();
+        editor.setValue("REFRESH MATERIALIZED VIEW " + view);
+        editor.clearSelection();
+        runQuery();
       }
       break;
     case "export":
