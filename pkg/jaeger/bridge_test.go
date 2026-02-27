@@ -13,7 +13,7 @@ import (
 func strPtr(s string) *string { return &s }
 func boolPtr(b bool) *bool    { return &b }
 func int64Ptr(i int64) *int64 { return &i }
-func f64Ptr(f float64) *float64 { return &f }
+func float64Ptr(f float64) *float64 { return &f }
 
 func TestConvertTag(t *testing.T) {
 	tests := []struct {
@@ -38,7 +38,7 @@ func TestConvertTag(t *testing.T) {
 		},
 		{
 			name:     "double tag",
-			input:    &jaegerthrift.Tag{Key: "k", VType: jaegerthrift.TagType_DOUBLE, VDouble: f64Ptr(3.14)},
+			input:    &jaegerthrift.Tag{Key: "k", VType: jaegerthrift.TagType_DOUBLE, VDouble: float64Ptr(3.14)},
 			expected: v1.KeyValue{Key: "k", VType: v1.ValueType_FLOAT64, VFloat64: 3.14},
 		},
 		{
@@ -167,6 +167,45 @@ func TestConvertSpan_ParentAlreadyInReferences_NoDuplicate(t *testing.T) {
 	require.NotNil(t, got)
 	// ParentSpanId matches the existing ChildOf reference — no duplicate should be added.
 	assert.Len(t, got.References, 1)
+}
+
+func TestConvertProcess_NilProcess(t *testing.T) {
+	got := convertProcess(nil)
+	require.NotNil(t, got)
+	assert.Equal(t, "", got.ServiceName)
+	assert.Empty(t, got.Tags)
+}
+
+func TestConvertProcess_WithTagsAndServiceName(t *testing.T) {
+	p := &jaegerthrift.Process{
+		ServiceName: "my-service",
+		Tags: []*jaegerthrift.Tag{
+			{Key: "hostname", VType: jaegerthrift.TagType_STRING, VStr: strPtr("host1")},
+		},
+	}
+	got := convertProcess(p)
+	require.NotNil(t, got)
+	assert.Equal(t, "my-service", got.ServiceName)
+	require.Len(t, got.Tags, 1)
+	assert.Equal(t, "hostname", got.Tags[0].Key)
+	assert.Equal(t, "host1", got.Tags[0].VStr)
+}
+
+func TestConvertSpan_ProcessSetOnSpan(t *testing.T) {
+	proc := &jaegerthrift.Process{ServiceName: "svc"}
+	batch := &jaegerthrift.Batch{
+		Spans: []*jaegerthrift.Span{
+			{TraceIdLow: 1, SpanId: 2, StartTime: 0, Duration: 100},
+		},
+		Process: proc,
+	}
+
+	p := convertProcess(batch.Process)
+	span := convertSpan(batch.Spans[0])
+	span.Process = p
+
+	require.NotNil(t, span.Process)
+	assert.Equal(t, "svc", span.Process.ServiceName)
 }
 
 func TestConvertSpan_TagsAndLogs(t *testing.T) {

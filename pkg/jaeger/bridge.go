@@ -133,6 +133,19 @@ func convertSpan(s *jaegerthrift.Span) *v1.Span {
 	}
 }
 
+// convertProcess converts a Thrift Process to a v1.Process, including its
+// tags. A nil input returns an empty (but non-nil) Process so callers can
+// always set it on spans without a nil-pointer check.
+func convertProcess(p *jaegerthrift.Process) *v1.Process {
+	if p == nil {
+		return &v1.Process{}
+	}
+	return &v1.Process{
+		ServiceName: p.ServiceName,
+		Tags:        convertTags(p.Tags),
+	}
+}
+
 // HandleTraces returns an http.HandlerFunc that receives Thrift-encoded Jaeger
 // spans over HTTP and forwards them to a Jaeger gRPC collector.
 func HandleTraces(client api_v2.CollectorServiceClient) http.HandlerFunc {
@@ -148,7 +161,9 @@ func HandleTraces(client api_v2.CollectorServiceClient) http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		r.Body.Close()
+		if err := r.Body.Close(); err != nil {
+			log.Println("body close error:", err)
+		}
 
 		if len(data) == 0 {
 			log.Println("empty request body")
@@ -172,13 +187,16 @@ func HandleTraces(client api_v2.CollectorServiceClient) http.HandlerFunc {
 		}
 
 		spans := make([]*v1.Span, 0, len(batch.Spans))
+		proc := convertProcess(batch.Process)
 		for _, s := range batch.Spans {
-			spans = append(spans, convertSpan(s))
+			span := convertSpan(s)
+			span.Process = proc
+			spans = append(spans, span)
 		}
 
 		grpcBatch := v1.Batch{
 			Spans:   spans,
-			Process: &v1.Process{ServiceName: batch.Process.GetServiceName()},
+			Process: proc,
 		}
 
 		req := &api_v2.PostSpansRequest{
