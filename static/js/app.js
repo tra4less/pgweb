@@ -350,7 +350,9 @@ function performTableAction(table, action, el) {
   }
 }
 
-function performViewAction(view, action, el) {
+function performViewAction(view, action, el, type) {
+  var isMaterializedView = (type == "materialized_view");
+
   if (action == "delete") {
     var message = "Are you sure you want to " + action + " view " + view + " ?";
     if (!confirm(message)) return;
@@ -358,11 +360,20 @@ function performViewAction(view, action, el) {
 
   switch(action) {
     case "delete":
-      executeQuery("DROP VIEW " + view, function(data) {
+      var dropSql = isMaterializedView ? "DROP MATERIALIZED VIEW " : "DROP VIEW ";
+      executeQuery(dropSql + view, function(data) {
         if (data.error) alert(data.error);
         loadSchemas();
         resetTable();
       });
+      break;
+    case "refresh":
+      if (isMaterializedView) {
+        showQueryPanel();
+        editor.setValue("REFRESH MATERIALIZED VIEW " + view);
+        editor.clearSelection();
+        runQuery();
+      }
       break;
     case "export":
       var format = el.data("format");
@@ -1392,13 +1403,13 @@ function bindContextMenus() {
 
     if (group == "materialized_view") {
       $(el).contextmenu({
-        target: "#view_context_menu",
+        target: "#materialized_view_context_menu",
         scopes: "li.schema-materialized_view",
         onItem: function(context, e) {
           var el      = $(e.target);
           var table   = getQuotedSchemaTableName($(context[0]).data("id"));
           var action  = el.data("action");
-          performViewAction(table, action, el);
+          performViewAction(table, action, el, "materialized_view");
         }
       });
     }
